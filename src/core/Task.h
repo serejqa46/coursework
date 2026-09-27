@@ -27,9 +27,21 @@ public:
     ~Task();
 
     //вспомогательные методы
-
     void setTest(int index, const string& testData);
     void printInfo() const;
+
+    //перегрузка
+    Task& operator=(const Task& other);
+
+    string& operator[](int index);
+
+    const string& operator[](int index) const;
+
+    friend ostream& operator<<(ostream& os, const Task& task);
+
+    bool operator==(const Task& other) const;
+
+    bool operator!=(const Task& other) const;
 };
 
 #endif //TASK_H
