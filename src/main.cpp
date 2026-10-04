@@ -1,6 +1,9 @@
+#include <vector>
 #include <windows.h>
 #include <iostream>
 #include "core/Task.h"
+#include "core/Teacher.h"
+#include "core/Student.h"
 #include <clocale>
 
 using namespace std;
@@ -36,5 +39,19 @@ int main() {
     cout << "\n--- Информация о task1 ---" << endl;
     cout << task1;
 
-    return 0; // В этот момент вызываются деструкторы для task3, task2, task1!
+    // 6. Полиморфизм и виртуальные функции
+    std::vector<User*> users;
+    users.push_back(new Student(1, "Sergey", "123", 15, 100));
+    users.push_back(new Teacher(2, "prof_Elena", "qwerty", "Computer Science", 15));
+    cout << "--- Список пользователей системы ---" << endl;
+    for (const User* user : users) {
+        user -> printInfo();
+    }
+
+    for (User* user : users) {
+        delete user;
+    }
+    users.clear();
+    
+    return 0;
 }

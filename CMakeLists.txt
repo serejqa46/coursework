@@ -4,22 +4,23 @@ project(coursework CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Включаем автоматическую обработку файлов Qt (если есть .ui / Q_OBJECT)
+# Включаем автоматическую обработку файлов Qt
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Подключаем директорию src для корректных инклюдов
-include_directories(src)
-
-# Собираем все файлы .cpp из src, src/core и src/gui
-file(GLOB_RECURSE SOURCES 
-    "src/*.cpp"
-    "src/*.h"
+# Явно перечисляем все файлы проекта (это надежнее, чем GLOB)
+add_executable(coursework
+    main.cpp
+    src/core/Task.cpp
+    src/core/User.cpp
+    src/core/Student.cpp
+    src/core/Teacher.cpp
 )
 
-add_executable(coursework ${SOURCES})
+# Подключаем директорию src для инклюдов
+target_include_directories(coursework PRIVATE src)
 
-# Если используешь Qt, раскомментируй строки ниже:
-# find_package(Qt6 REQUIRED COMPONENTS Widgets) # или Qt5
+# Если используешь Qt6 (или Qt5):
+# find_package(Qt6 REQUIRED COMPONENTS Widgets)
 # target_link_libraries(coursework PRIVATE Qt6::Widgets)
