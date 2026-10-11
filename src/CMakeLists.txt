@@ -11,6 +11,8 @@ add_executable(coursework
         core/Student.cpp
         core/Teacher.cpp
         core/Task.cpp
+        core/Exception.h
+        core/Exception.cpp
 )
 
 # Подключаем папки с заголовочными файлами (.h)
