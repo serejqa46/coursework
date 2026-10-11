@@ -2,11 +2,11 @@
 #include <iostream>
 
 // 1. Конструктор по умолчанию
-Task::Task() : title("Untitled Task"), timeLimit(1000), testCount(0), tests(nullptr) {}
+Task::Task() : title("Untitled Task"), difficulty(1), points(10), timeLimit(1000), testCount(0), tests(nullptr) {}
 
 // 2. Конструктор с параметрами (с использованием списка инициализации)
-Task::Task(string title, int timeLimit, int testCount)
-    : title(title), timeLimit(timeLimit), testCount(testCount) {
+Task::Task(string title, int timeLimit, int testCount, int points, int difficulty)
+    : title(title), timeLimit(timeLimit), testCount(testCount), points(points), difficulty(difficulty) {
     if (testCount > 0) {
         tests = new string[testCount];
     } else {
@@ -16,7 +16,7 @@ Task::Task(string title, int timeLimit, int testCount)
 
 // 3. Конструктор копирования
 Task::Task(const Task& other)
-    : title(other.title), timeLimit(other.timeLimit), testCount(other.testCount) {
+    : title(other.title), timeLimit(other.timeLimit), testCount(other.testCount), difficulty(other.difficulty), points(other.points) {
     if (testCount > 0) {
         tests = new string[testCount];
         for (int i = 0; i < testCount; ++i) {
@@ -106,4 +106,26 @@ bool Task::operator==(const Task& other) const {
 
 bool Task::operator!=(const Task& other) const {
     return !(*this == other);
+}
+
+istream& operator>>(istream& is, Task& otherTask) {
+    is >> otherTask.title >> otherTask.timeLimit >> otherTask.testCount >> otherTask.points >> otherTask.difficulty;
+
+    delete[] otherTask.tests;
+
+    if (otherTask.testCount > 0) {
+        otherTask.tests = new string[otherTask.testCount];
+        for (int i = 0; i < otherTask.testCount; ++i) {
+            is >> otherTask.tests[i];
+        }
+    }
+    else {
+        otherTask.tests = nullptr;
+    }
+
+    return is;
+}
+
+bool Task::operator<(const Task& otherTask) const {
+    return this->difficulty < otherTask.difficulty;
 }

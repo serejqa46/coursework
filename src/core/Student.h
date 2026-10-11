@@ -16,6 +16,14 @@ public:
     Student(int id, const string& login, const string& passwordHash, int solvedTaskCount = 0, double rating = 0.0);
 
     void printInfo() const override;
+
+    bool operator<(const Student& otherStudent) const;
+
+    bool operator>(const Student& otherStudent) const;
+
+    Student& operator+=(double points);
+
+    Student& operator-=(double penalty);
 };
 
 
