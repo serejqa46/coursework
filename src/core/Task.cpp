@@ -1,12 +1,22 @@
 #include "Task.h"
+#include "Exception.h"
 #include <iostream>
 
 // 1. Конструктор по умолчанию
 Task::Task() : title("Untitled Task"), difficulty(1), points(10), timeLimit(1000), testCount(0), tests(nullptr) {}
 
 // 2. Конструктор с параметрами (с использованием списка инициализации)
-Task::Task(string title, int timeLimit, int testCount, int points, int difficulty)
-    : title(title), timeLimit(timeLimit), testCount(testCount), points(points), difficulty(difficulty) {
+Task::Task(string title, int difficulty, int points, int timeLimit, int testCount)
+    : title(title), difficulty(difficulty), points(points), timeLimit(timeLimit), testCount(testCount) {
+
+    if (testCount < 0) {
+        throw SystemException("Ошибка: количество тестов не должно быть отрицательным!", 101);
+    }
+
+    if (timeLimit <= 0) {
+        throw SystemException("Ошибка: количество тестов должно быть больше нуля!", 102);
+    }
+
     if (testCount > 0) {
         tests = new string[testCount];
     } else {
@@ -69,10 +79,18 @@ Task& Task::operator=(const Task& other) {
 }
 
 string& Task::operator[](int index){
+    if (index < 0 || index >= testCount) {
+        throw SystemException("Ошибка: индекс вышел за границы тестов!", 103);
+    }
+
     return tests[index];
 }
 
 const string& Task::operator[](int index) const {
+    if (index < 0 || index >= testCount) {
+        throw SystemException("Ошибка: индекс вышел за границы тестов!", 103);
+    }
+
     return tests[index];
 }
 
