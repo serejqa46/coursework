@@ -11,6 +11,8 @@ private:
     string title;
     int timeLimit;
     int testCount;
+    int difficulty;
+    int points;
     string* tests;
 
 public:
@@ -18,7 +20,7 @@ public:
     Task();
 
     // конструктор с параметрами
-    Task(string title, int timeLimit, int testCount);
+    Task(string title, int difficulty, int points, int timeLimit, int testCount);
 
     //конструктор копирования
     Task(const Task& other);
@@ -38,6 +40,10 @@ public:
     const string& operator[](int index) const;
 
     friend ostream& operator<<(ostream& os, const Task& task);
+
+    friend istream& operator>>(istream& is, Task& otherTask);
+
+    bool operator<(const Task& Task) const;
 
     bool operator==(const Task& other) const;
 
