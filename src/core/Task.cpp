@@ -3,18 +3,20 @@
 #include <iostream>
 
 // 1. Конструктор по умолчанию
-Task::Task() : title("Untitled Task"), difficulty(1), points(10), timeLimit(1000), testCount(0), tests(nullptr) {}
+Task::Task() : title("Untitled Task"), difficulty(1), points(10), timeLimit(1000), testCount(0),
+        tests(nullptr), statement(""), examples(""), codeTemplate("") {}
 
 // 2. Конструктор с параметрами (с использованием списка инициализации)
-Task::Task(string title, int difficulty, int points, int timeLimit, int testCount)
-    : title(title), difficulty(difficulty), points(points), timeLimit(timeLimit), testCount(testCount), tests(nullptr) {
+Task::Task(string title, int difficulty, int points, int timeLimit, int testCount, string statement, string examples, string codeTemplate)
+    : title(title), difficulty(difficulty), points(points), timeLimit(timeLimit), testCount(testCount),
+        tests(nullptr), statement(statement), examples(examples), codeTemplate(codeTemplate) {
 
     if (testCount < 0) {
         throw SystemException::invalidTestCount(testCount);
     }
 
     if (testCount > 0) {
-        tests = new string[testCount];
+        tests = new TestCase[testCount];
     } else {
         tests = nullptr;
     }
@@ -22,9 +24,10 @@ Task::Task(string title, int difficulty, int points, int timeLimit, int testCoun
 
 // 3. Конструктор копирования
 Task::Task(const Task& other)
-    : title(other.title), timeLimit(other.timeLimit), testCount(other.testCount), difficulty(other.difficulty), points(other.points) {
+    : title(other.title), timeLimit(other.timeLimit), testCount(other.testCount), difficulty(other.difficulty),
+        points(other.points), tests(nullptr), statement(other.statement), examples(other.examples), codeTemplate(other.codeTemplate) {
     if (testCount > 0) {
-        tests = new string[testCount];
+        tests = new TestCase[testCount];
         for (int i = 0; i < testCount; ++i) {
             tests[i] = other.tests[i];
         }
@@ -39,9 +42,13 @@ Task::~Task() {
 }
 
 // Методы
-void Task::setTest(int index, const string& testData) {
-    if (index >= 0 && index < testCount && tests != nullptr) {
-        tests[index] = testData;
+void Task::setTest(int index, const string& input, const string& expectedOutput) {
+    if (index < 0 || index >= testCount) {
+        throw SystemException::outOfRange(index, testCount);
+    }
+    if (tests != nullptr) {
+        tests[index].input = input;
+        tests[index].expectedOutput = expectedOutput;
     }
 }
 
@@ -49,7 +56,9 @@ void Task::printInfo() const {
     cout << "Task: " << title << " | TL: " << timeLimit << "ms" << endl;
     cout << "Tests count: " << testCount << endl;
     for (int i = 0; i < testCount; ++i) {
-        cout << "  Test #" << i + 1 << ": " << tests[i] << endl;
+        cout << "  Test #" << i + 1
+             << " | IN: " << tests[i].input
+             << " | OUT: " << tests[i].expectedOutput << endl;
     }
 }
 
@@ -62,9 +71,14 @@ Task& Task::operator=(const Task& other) {
     title = other.title;
     timeLimit = other.timeLimit;
     testCount = other.testCount;
+    difficulty = other.difficulty;
+    points = other.points;
+    statement = other.statement;
+    examples = other.examples;
+    codeTemplate = other.codeTemplate;
 
     if (testCount > 0) {
-        tests = new string[testCount];
+        tests = new TestCase[testCount];
         for (int i = 0; i < testCount; ++i) {
             tests[i] = other.tests[i];
         }
@@ -74,7 +88,7 @@ Task& Task::operator=(const Task& other) {
     return *this;
 }
 
-string& Task::operator[](int index){
+TestCase& Task::operator[](int index){
     if (index < 0 || index >= testCount) {
         throw SystemException::outOfRange(index, testCount);
     }
@@ -82,7 +96,7 @@ string& Task::operator[](int index){
     return tests[index];
 }
 
-const string& Task::operator[](int index) const {
+const TestCase& Task::operator[](int index) const {
     if (index < 0 || index >= testCount) {
         throw SystemException::outOfRange(index, testCount);
     }
@@ -98,7 +112,9 @@ ostream& operator<<(ostream& os, const Task& task) {
     if (task.testCount == 0 && task.tests != nullptr) {
         os << "Тесты:" << endl;
         for (int i = 0; i < task.testCount; ++i) {
-            os << " Тест #" << i + 1 << ": " << task.tests[i] << endl;
+            os << " Тест #" << i + 1
+               << " [IN: " << task.tests[i].input
+               << " | OUT: " << task.tests[i].expectedOutput << "]" << endl;
         }
     } else {
         os << "Тесты отсутствуют" << endl;
@@ -107,7 +123,9 @@ ostream& operator<<(ostream& os, const Task& task) {
 }
 
 bool Task::operator==(const Task& other) const {
-    if (title != other.title || timeLimit != other.timeLimit || testCount != other.testCount) {
+    if (title != other.title || timeLimit != other.timeLimit || testCount != other.testCount
+        || difficulty != other.difficulty || points != other.points || statement != other.statement ||
+        examples != other.examples || codeTemplate != other.codeTemplate) {
         return false;
     }
     for (int i = 0; i < testCount; ++i) {
@@ -128,9 +146,9 @@ istream& operator>>(istream& is, Task& otherTask) {
     delete[] otherTask.tests;
 
     if (otherTask.testCount > 0) {
-        otherTask.tests = new string[otherTask.testCount];
+        otherTask.tests = new TestCase[otherTask.testCount];
         for (int i = 0; i < otherTask.testCount; ++i) {
-            is >> otherTask.tests[i];
+            is >> otherTask.tests[i].input >> otherTask.tests[i].expectedOutput;
         }
     }
     else {

@@ -9,6 +9,95 @@ namespace fs = std::filesystem;
 
 namespace {
         constexpr char PACKAGE_SIGNATURE[8] = {'O', 'L', 'Y', 'M', 'P', 'T', 'K', '1'};
+        constexpr std::size_t MAX_FIELD_BYTES = 10000000;
+
+        void writeTextFile(const fs::path& filePath, const std::string& content) {
+                std::ofstream out(filePath, std::ios::binary);
+                if (!out.is_open()) {
+                        throw SystemException::fileOpenError(filePath.string(), true);
+                }
+                if (!content.empty()) {
+                        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+                }
+                if (!out.good()) {
+                        throw SystemException("Ошибка при записи файла '" + filePath.string() + "'",
+                                SystemException::FileWriteErr);
+                }
+        }
+
+        std::string readTextFileIfExists(const fs::path& filePath) {
+                if (!fs::exists(filePath)) {
+                        return "";
+                }
+                std::ifstream in(filePath, std::ios::binary);
+                if (!in.is_open()) {
+                        throw SystemException::fileOpenError(filePath.string(), false);
+                }
+                std::ostringstream buffer;
+                buffer << in.rdbuf();
+                if (in.bad()) {
+                        throw SystemException(
+                            "Ошибка при чтении файла '" + filePath.string() + "'",
+                            SystemException::FileReadErr
+                        );
+                }
+                return buffer.str();
+        }
+
+        std::string readRequiredTextFile(const fs::path& filePath, const std::string& label) {
+        if (!fs::exists(filePath)) {
+            throw SystemException::corruptedPackage(
+                "Отсутствует " + label + ": " + filePath.string()
+            );
+        }
+        std::ifstream in(filePath, std::ios::binary);
+        if (!in.is_open()) {
+            throw SystemException::fileOpenError(filePath.string(), false);
+        }
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        if (in.bad()) {
+            throw SystemException(
+                "Ошибка при чтении файла '" + filePath.string() + "'",
+                SystemException::FileReadErr
+            );
+        }
+        return buffer.str();
+    }
+
+    void writeLengthPrefixedString(std::ofstream& out, const std::string& str, const std::string& fileLabel) {
+        std::size_t len = str.size();
+        out.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        if (len > 0) {
+            out.write(str.data(), static_cast<std::streamsize>(len));
+        }
+        if (!out.good()) {
+            throw SystemException(
+                "Ошибка при записи поля (" + fileLabel + ") в пакет '" + "'",
+                SystemException::FileWriteErr
+            );
+        }
+    }
+
+    std::string readLengthPrefixedString(std::ifstream& in, const std::string& fieldName, const std::string& pathStr) {
+        std::size_t len = 0;
+        in.read(reinterpret_cast<char*>(&len), sizeof(len));
+        if (!in.good() || len > MAX_FIELD_BYTES) {
+            throw SystemException::corruptedPackage(
+                "Неверная длина поля '" + fieldName + "' в " + pathStr
+            );
+        }
+        std::string result(len, '\0');
+        if (len > 0) {
+            in.read(&result[0], static_cast<std::streamsize>(len));
+            if (in.gcount() != static_cast<std::streamsize>(len)) {
+                throw SystemException::corruptedPackage(
+                    "Конец файла при чтении поля '" + fieldName + "' в " + pathStr
+                );
+            }
+        }
+        return result;
+    }
 }
 
 FileManager::FileManager(const std::string& tasksDir, const std::string& exportsDir)
@@ -43,6 +132,14 @@ void FileManager::saveTask(const Task &task) const {
         folderName << std::setw(6) << std::setfill('0') << nextId;
         fs::path taskFolder = tasksDir / folderName.str();
 
+        fs::create_directories(taskFolder, ec);
+        if (ec) {
+                throw SystemException(
+                    "Ошибка при создании директории задачи '" + taskFolder.string() + "': " + ec.message(),
+                    SystemException::DirectoryCreateErr
+                );
+        }
+
         // meta
         fs::path metaPath = taskFolder / "meta.txt";
         std::ofstream metaOut(metaPath);
@@ -53,8 +150,8 @@ void FileManager::saveTask(const Task &task) const {
         metaOut << task.getTitle() << '\n';
         metaOut << task.getDifficulty() << ' '
                 << task.getPoints() << ' '
-                << task.getTestCount() << ' '
-                << task.getTimeLimit() << '\n';
+                << task.getTimeLimit() << ' '
+                << task.getTestCount() << '\n';
 
         if (!metaOut.good()) {
                 throw SystemException("Ошибка при записи метаданных в '" + metaPath.string() + "'",
@@ -62,20 +159,17 @@ void FileManager::saveTask(const Task &task) const {
                         );
         }
 
+        writeTextFile(taskFolder / "statement.txt", task.getStatement());
+        writeTextFile(taskFolder / "examples.txt", task.getExamples());
+        writeTextFile(taskFolder / "template.txt", task.getCodeTemplate());
+
         // каждый тест в отдельный файл
         for (int i = 0; i < task.getTestCount(); ++i) {
-                fs::path testPath = taskFolder / ("test_" + std::to_string(i) + ".txt");
-                std::ofstream testOut(testPath);
-                if (!testOut.is_open()) {
-                        throw SystemException::fileOpenError(testPath.string(), true);
-                }
-
-                testOut << task[i];
-                if (!testOut.good()) {
-                        throw SystemException("Ошибка при записи тестового файла '" + testPath.string() + "'",
-                                SystemException::FileWriteErr
-                                );
-                }
+                const TestCase& tc = task[i];
+                fs::path inPath = taskFolder / ("input_" + std::to_string(i) + ".txt");
+                fs::path outPath = taskFolder / ("output_" + std::to_string(i) + ".txt");
+                writeTextFile(inPath, tc.input);
+                writeTextFile(outPath, tc.expectedOutput);
         }
 }
 
@@ -121,25 +215,23 @@ std::vector<Task> FileManager::loadAllTasks() const {
                         throw SystemException::invalidTestCount(testCount);
                 }
 
-                Task loadedTask(title, difficulty, points, timeLimit, testCount);
+                std::string statement = readTextFileIfExists(taskFolder / "statement.txt");
+                std::string examples = readTextFileIfExists(taskFolder / "examples.txt");
+                std::string codeTemplate = readTextFileIfExists(taskFolder / "template.txt");
+
+                Task loadedTask(title, difficulty, points, timeLimit, testCount, statement, examples, codeTemplate);
 
                 for (int i = 0; i < testCount; ++i) {
-                        fs::path testPath = taskFolder / ("test_" + std::to_string(i) + ".txt");
-                        std::ifstream testIn(testPath);
-                        if (!testIn.is_open()) {
-                                throw SystemException::fileOpenError(testPath.string(), false);
-                        }
-
-                        std::ostringstream buffer;
-                        buffer << testIn.rdbuf();
-                        if (testIn.bad()) {
-                                throw SystemException("Ошибка при чтении тестового файла '" + testPath.string() + "'",
-                                        SystemException::FileReadErr);
-                        }
-                        loadedTask.setTest(i, buffer.str());
+                        fs::path inPath = taskFolder / ("input_" + std::to_string(i) + ".txt");
+                        fs::path outPath = taskFolder / ("output_" + std::to_string(i) + ".txt");
+                        std::string inputData = readRequiredTextFile(inPath, "входного файла теста #" + std::to_string(i));
+                        std::string expectedOut = readRequiredTextFile(outPath, "файла эталонного ответа теста #" + std::to_string(i));
+                        loadedTask.setTest(i, inputData, expectedOut);
                 }
+
                 tasks.push_back(loadedTask);
         }
+
         return tasks;
 }
 
@@ -164,14 +256,18 @@ void FileManager::exportTask(const Task& task, const std::string& packageName) c
 
         // 1. сигнатура
         out.write(PACKAGE_SIGNATURE, sizeof(PACKAGE_SIGNATURE));
+        if (!out.good()) {
+                throw SystemException(
+                    "Ошибка при записи заголовка пакета '" + packagePath.string() + "'",
+                    SystemException::FileWriteErr
+                );
+        }
 
         // 2. название задачи
-        const std::string& title = task.getTitle();
-        std::size_t titleLen = title.size();
-        out.write(reinterpret_cast<const char*>(&titleLen), sizeof(titleLen));
-        if (titleLen > 0) {
-                out.write(title.data(), static_cast<std::streamsize>(titleLen));
-        }
+        writeLengthPrefixedString(out, task.getTitle(), "title");
+        writeLengthPrefixedString(out, task.getStatement(), "statement");
+        writeLengthPrefixedString(out, task.getExamples(), "examples");
+        writeLengthPrefixedString(out, task.getCodeTemplate(), "codeTemplate");
 
         // 3. остальные параметры
         int difficulty = task.getDifficulty();
@@ -184,19 +280,11 @@ void FileManager::exportTask(const Task& task, const std::string& packageName) c
         out.write(reinterpret_cast<const char*>(&timeLimit), sizeof(timeLimit));
         out.write(reinterpret_cast<const char*>(&testCount), sizeof(testCount));
 
-        // 4. каждый тест
+        // 4. каждый тест + эталонный ответ
         for (int i = 0; i < testCount; ++i) {
-                const std::string& testData = task[i];
-                std::size_t testLen = testData.size();
-                out.write(reinterpret_cast<const char*>(&testLen), sizeof(testLen));
-                if (testLen > 0) {
-                        out.write(testData.data(), static_cast<std::streamsize>(testLen));
-                }
-        }
-
-        if (!out.good()) {
-                throw SystemException("Ошибка при записи файла пакета '" + packagePath.string() + "'",
-                        SystemException::FileWriteErr);
+                const TestCase& tc = task[i];
+                writeLengthPrefixedString(out, tc.input, "test_input_" + std::to_string(i));
+                writeLengthPrefixedString(out, tc.expectedOutput, "test_expected_" + std::to_string(i));
         }
 }
 
@@ -217,11 +305,11 @@ Task FileManager::importTask(const std::string& packagePath) const {
                         SystemException::InvalidPackageSig);
                 }
 
-        std::size_t titleLen = 0;
-        in.read(reinterpret_cast<char*>(&titleLen), sizeof(titleLen));
-        if (!in.good() || titleLen > 1000000) {
-                throw SystemException::corruptedPackage("Неизвестная EOF при чтении названия теста в " + inputPath.string());
-        }
+        const std::string pathStr = inputPath.string();
+        std::string title = readLengthPrefixedString(in, "title", pathStr);
+        std::string statement = readLengthPrefixedString(in, "statement", pathStr);
+        std::string examples = readLengthPrefixedString(in, "examples", pathStr);
+        std::string codeTemplate = readLengthPrefixedString(in, "codeTemplate", pathStr);
 
         int difficulty = 0;
         int points = 0;
@@ -241,26 +329,13 @@ Task FileManager::importTask(const std::string& packagePath) const {
                 throw SystemException::invalidTestCount(testCount);
         }
 
-        Task importedTask(title, difficulty, points, timeLimit, testCount);
+        Task importedTask(title, difficulty, points, timeLimit, testCount, statement, examples, codeTemplate);
 
         for (int i = 0; i < testCount; ++i) {
-                std::size_t testLen = 0;
-                in.read(reinterpret_cast<char*>(&testLen), sizeof(testLen));
-                if (in.fail() || in.bad() || testLen > 1000000) {
-                        throw SystemException::corruptedPackage(
-                                "Неверная длина тестов в индексе " + std::to_string(i) + " в" + inputPath.string());
-                }
-
-                std::string testData(testLen, '\0');
-                if (testLen > 0) {
-                        in.read(&testData[0], static_cast<std::streamsize>(testLen));
-                        if (in.gcount() != static_cast<std::streamsize>(testLen)) {
-                                throw SystemException::corruptedPackage(
-                                        "Неизвестная EOF при чтении теста " + std::to_string(i) + " в" + inputPath.string());
-                        }
-                }
-
-                importedTask.setTest(i, testData);
+                std::string inData = readLengthPrefixedString(in, "test_input_" + std::to_string(i), pathStr);
+                std::string outData = readLengthPrefixedString(in, "test_expected_" + std::to_string(i), pathStr);
+                importedTask.setTest(i, inData, outData);
         }
+
         return importedTask;
 }
