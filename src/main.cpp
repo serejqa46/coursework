@@ -4,7 +4,7 @@
 #include "core/Task.h"
 #include "core/Teacher.h"
 #include "core/Student.h"
-#include "Exception.h"
+#include "core/Exception.h"
 #include <clocale>
 
 using namespace std;

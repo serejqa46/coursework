@@ -34,20 +34,20 @@ public:
 
     //перегрузка
     Task& operator=(const Task& other);
-
     string& operator[](int index);
-
     const string& operator[](int index) const;
-
     friend ostream& operator<<(ostream& os, const Task& task);
-
     friend istream& operator>>(istream& is, Task& otherTask);
-
     bool operator<(const Task& Task) const;
-
     bool operator==(const Task& other) const;
-
     bool operator!=(const Task& other) const;
+
+    // getter's
+    const string& getTitle()const { return title; }
+    int getTimeLimit()const { return timeLimit; }
+    int getTestCount()const { return testCount; }
+    int getDifficulty()const { return difficulty; }
+    int getPoints()const { return points; }
 };
 
 #endif //TASK_H

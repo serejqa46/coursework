@@ -7,14 +7,10 @@ Task::Task() : title("Untitled Task"), difficulty(1), points(10), timeLimit(1000
 
 // 2. Конструктор с параметрами (с использованием списка инициализации)
 Task::Task(string title, int difficulty, int points, int timeLimit, int testCount)
-    : title(title), difficulty(difficulty), points(points), timeLimit(timeLimit), testCount(testCount) {
+    : title(title), difficulty(difficulty), points(points), timeLimit(timeLimit), testCount(testCount), tests(nullptr) {
 
     if (testCount < 0) {
-        throw SystemException("Ошибка: количество тестов не должно быть отрицательным!", 101);
-    }
-
-    if (timeLimit <= 0) {
-        throw SystemException("Ошибка: количество тестов должно быть больше нуля!", 102);
+        throw SystemException::invalidTestCount(testCount);
     }
 
     if (testCount > 0) {
@@ -80,7 +76,7 @@ Task& Task::operator=(const Task& other) {
 
 string& Task::operator[](int index){
     if (index < 0 || index >= testCount) {
-        throw SystemException("Ошибка: индекс вышел за границы тестов!", 103);
+        throw SystemException::outOfRange(index, testCount);
     }
 
     return tests[index];
@@ -88,7 +84,7 @@ string& Task::operator[](int index){
 
 const string& Task::operator[](int index) const {
     if (index < 0 || index >= testCount) {
-        throw SystemException("Ошибка: индекс вышел за границы тестов!", 103);
+        throw SystemException::outOfRange(index, testCount);
     }
 
     return tests[index];
