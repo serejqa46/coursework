@@ -24,7 +24,7 @@ void FileManager::saveTask(const Task &task) const {
 
         // 6-ти значный номер папки
         int nextId = 1;
-        while (nextId < 100000) {
+        while (nextId < 1000000) {
                 std::ostringstream nameStream;
                 nameStream << std::setw(6) << std::setfill('0') << nextId;
                 fs::path candidate = tasksDir / nameStream.str();
@@ -40,7 +40,7 @@ void FileManager::saveTask(const Task &task) const {
 
         // meta
         fs::path metaPath = taskFolder / "meta.txt";
-        std::ofstream metaOut (metaPath);
+        std::ofstream metaOut(metaPath);
         if (!metaOut.is_open()) {
                 throw SystemException::fileOpenError(metaPath.string(), true);
         }
@@ -60,7 +60,7 @@ void FileManager::saveTask(const Task &task) const {
         // каждый тест в отдельный файл
         for (int i = 0; i < task.getTestCount(); ++i) {
                 fs::path testPath = taskFolder / ("test_" + std::to_string(i) + ".txt");
-                std::ofstream testOut (testPath);
+                std::ofstream testOut(testPath);
                 if (!testOut.is_open()) {
                         throw SystemException::fileOpenError(testPath.string(), true);
                 }
@@ -75,3 +75,65 @@ void FileManager::saveTask(const Task &task) const {
 }
 
 
+std::vector<Task> FileManager::loadAllTasks() const {
+        std::vector<Task> tasks;
+
+        if (!fs::exists(tasksDir) || !fs::is_directory(tasksDir)) {
+                return tasks;
+        }
+
+        for (const auto& entry : fs::directory_iterator(tasksDir)) {
+                if (!entry.is_directory()) {
+                        continue;
+                }
+
+                fs::path taskFolder = entry.path();
+                fs::path metaPath = taskFolder / "meta.txt";
+                if (!fs::exists(metaPath)) {
+                        continue;
+                }
+
+                std::ifstream metaIn(metaPath);
+                if (!metaIn.is_open()) {
+                        throw SystemException::fileOpenError(metaPath.string(), false);
+                }
+
+                std::string title;
+                if (!std::getline(metaIn, title)) {
+                        throw SystemException::corruptedPackage("Отсутствует название теста в " + metaPath.string());
+                }
+
+                int difficulty = 0;
+                int points = 0;
+                int testCount = 0;
+                int timeLimit = 0;
+
+                if (!(metaIn >> difficulty >> points >> timeLimit >> testCount)) {
+                        throw SystemException::corruptedPackage("Неверные параметры теста в " + metaPath.string());
+                }
+
+                if (testCount < 0) {
+                        throw SystemException::invalidTestCount(testCount);
+                }
+
+                Task loadedTask(title, difficulty, points, timeLimit, testCount);
+
+                for (int i = 0; i < testCount; ++i) {
+                        fs::path testPath = taskFolder / ("test_" + std::to_string(i) + ".txt");
+                        std::ifstream testIn(testPath);
+                        if (!testIn.is_open()) {
+                                throw SystemException::fileOpenError(testPath.string(), false);
+                        }
+
+                        std::ostringstream buffer;
+                        buffer << testIn.rdbuf();
+                        if (testIn.bad()) {
+                                throw SystemException("Ошибка при чтении тестового файла '" + testPath.string() + "'",
+                                        SystemException::FileReadErr);
+                        }
+                        loadedTask.setTest(i, buffer.str());
+                }
+                tasks.push_back(loadedTask);
+        }
+        return tasks;
+}
